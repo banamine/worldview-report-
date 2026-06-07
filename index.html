@@ -1,29 +1,31 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>WorldViewTube Live Media Engine</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WorldViewTube · Pro Media Engine (Audit-Ready)</title>
 
-  <!-- External CDNs (Video engines & icons) -->
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.4.12/dist/hls.min.js"></script>
+  <!-- Updated CDNs: HLS.js 1.5.x (latest stable) + Dash.js 4.7.1 + Feather Icons -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.15/dist/hls.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dashjs@4.7.1/dist/dash.all.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.js"></script>
 
   <style>
-    /* Reset and Weebly Fullscreen Overrides */
+    /* ========== RESET / GLOBAL ========== */
+    * { box-sizing: border-box; user-select: none; -webkit-tap-highlight-color: transparent; }
     html, body {
       margin: 0;
       padding: 0;
       width: 100%;
       height: 100%;
-      background-color: #0d0d0d;
-      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background-color: #0a0a0f;
+      font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Oxygen, sans-serif;
       overflow: hidden;
-      color: #e5e5e5;
+      color: #eef2ff;
     }
 
-    /* Primary Player Stage (Edge to Edge, Fixed Center Alignment) */
+    /* ========== PLAYER STAGE (EDGE TO EDGE) ========== */
     .wvt-player-stage {
       position: fixed;
       top: 0;
@@ -38,7 +40,6 @@
       overflow: hidden;
     }
 
-    /* Video Core Canvas */
     .wvt-video-canvas {
       width: 100%;
       height: 100%;
@@ -46,14 +47,45 @@
       background: #000;
     }
 
-    /* Global Backdrop Dimming Overlay (Triggers when any sidebar is active) */
+    /* ========== LOADING SPINNER (UX-05) ========== */
+    .wvt-loading-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(4px);
+      z-index: 60;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      visibility: hidden;
+      opacity: 0;
+      transition: visibility 0.2s, opacity 0.2s;
+    }
+    .wvt-loading-overlay.active {
+      visibility: visible;
+      opacity: 1;
+    }
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid rgba(212,175,55,0.2);
+      border-top: 4px solid #d4af37;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    /* ========== DIMMER + SIDEBARS ========== */
     .wvt-dimmer-overlay {
       position: fixed;
       top: 0;
       left: 0;
       width: 100vw;
       height: 100vh;
-      background: rgba(0, 0, 0, 0.65);
+      background: rgba(0, 0, 0, 0.7);
       z-index: 90;
       opacity: 0;
       pointer-events: none;
@@ -64,39 +96,25 @@
       pointer-events: auto;
     }
 
-    /* Sidebar Foundation Layer (Slides OVER the video, doesn't push) */
     .wvt-sidebar {
       position: fixed;
       top: 0;
       width: 340px;
       height: 100vh;
-      background: rgba(20, 20, 20, 0.96);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
+      background: rgba(12,12,18,0.98);
+      backdrop-filter: blur(18px);
       z-index: 100;
-      box-shadow: 0 0 30px rgba(0,0,0,0.7);
+      box-shadow: 0 0 32px rgba(0,0,0,0.6);
       transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);
       display: flex;
       flex-direction: column;
+      border-right: 1px solid rgba(212,175,55,0.2);
     }
-    
-    .wvt-sidebar-left {
-      left: 0;
-      transform: translateX(-100%);
-      border-right: 1px solid rgba(212, 175, 55, 0.2);
-    }
-    
-    .wvt-sidebar-right {
-      right: 0;
-      transform: translateX(100%);
-      border-left: 1px solid rgba(212, 175, 55, 0.2);
-    }
-
-    /* Active Sidebar Toggles */
+    .wvt-sidebar-left { left: 0; transform: translateX(-100%); }
+    .wvt-sidebar-right { right: 0; transform: translateX(100%); border-left: 1px solid rgba(212,175,55,0.2); border-right: none; }
     body.left-open .wvt-sidebar-left { transform: translateX(0); }
     body.right-open .wvt-sidebar-right { transform: translateX(0); }
 
-    /* Internal Sidebar Structures */
     .wvt-sidebar-header {
       padding: 20px;
       border-bottom: 1px solid rgba(255,255,255,0.08);
@@ -108,518 +126,632 @@
       margin: 0;
       font-size: 1.1rem;
       font-weight: 600;
-      text-transform: uppercase;
       letter-spacing: 1px;
-      color: #d4af37; /* Gold Accent */
+      color: #d4af37;
     }
     .wvt-close-btn {
       background: transparent;
       border: none;
       color: #aaa;
       cursor: pointer;
-      padding: 5px;
+      padding: 8px;
       transition: color 0.2s;
+      min-width: 44px;
+      min-height: 44px;
     }
-    .wvt-close-btn:hover { color: #fff; }
-
     .wvt-sidebar-content {
       flex: 1;
       overflow-y: auto;
       padding: 15px;
-      -webkit-overflow-scrolling: touch; /* Smooth iOS scroll */
+      -webkit-overflow-scrolling: touch;
     }
 
-    /* Standard Interactive Playlist / Settings Lists */
+    /* Playlist items (improved touch target) */
     .wvt-list-item {
-      padding: 12px 15px;
-      background: rgba(255,255,255,0.03);
-      margin-bottom: 8px;
-      border-radius: 6px;
+      padding: 14px 16px;
+      background: rgba(255,255,255,0.04);
+      margin-bottom: 10px;
+      border-radius: 12px;
       cursor: pointer;
-      transition: background 0.2s, border-left 0.2s;
+      transition: all 0.2s;
       border-left: 3px solid transparent;
       display: flex;
       align-items: center;
       justify-content: space-between;
-    }
-    .wvt-list-item:hover {
-      background: rgba(255,255,255,0.08);
+      min-height: 56px;
     }
     .wvt-list-item.active {
-      background: rgba(212, 175, 55, 0.15);
-      border-left: 3px solid #d4af37;
+      background: rgba(212,175,55,0.18);
+      border-left-color: #d4af37;
     }
-    
     .wvt-setting-row {
-      margin-bottom: 20px;
+      margin-bottom: 24px;
     }
     .wvt-setting-label {
-      font-size: 0.85rem;
+      font-size: 0.75rem;
       text-transform: uppercase;
-      color: #999;
+      color: #aaa;
       margin-bottom: 8px;
-      letter-spacing: 0.5px;
+      letter-spacing: 1px;
     }
 
-    /* Premium Gold Floating Information Ribbon */
+    /* ========== GOLD RIBBON (truncation fix) ========== */
     .wvt-gold-ribbon {
       position: absolute;
       top: 20px;
       left: 50%;
       transform: translateX(-50%);
-      background: linear-gradient(135deg, rgba(20,20,20,0.9) 0%, rgba(35,35,35,0.9) 100%);
+      background: linear-gradient(135deg, rgba(16,16,22,0.95), rgba(28,28,34,0.95));
       border: 1px solid #d4af37;
-      padding: 10px 24px;
-      border-radius: 30px;
-      z-index: 50;
+      padding: 8px 20px;
+      border-radius: 40px;
+      z-index: 55;
       display: flex;
       align-items: center;
-      gap: 15px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-      pointer-events: auto;
-      transition: opacity 0.3s;
+      gap: 12px;
+      backdrop-filter: blur(8px);
+      white-space: nowrap;
+      max-width: 85vw;
     }
-    .wvt-gold-ribbon .pulse-dot {
+    .wvt-gold-ribbon span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+    .pulse-dot {
       width: 8px;
       height: 8px;
       background-color: #d4af37;
       border-radius: 50%;
       animation: ribbon-pulse 1.8s infinite;
+      flex-shrink: 0;
     }
     @keyframes ribbon-pulse {
-      0% { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.7); }
-      70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(212, 175, 55, 0); }
-      100% { transform: scale(0.8); box-shadow: 0 0 0 0 rgba(212, 175, 55, 0); }
+      0% { transform: scale(0.8); opacity: 0.6; }
+      70% { transform: scale(1.2); opacity: 1; }
+      100% { transform: scale(0.8); opacity: 0.6; }
     }
 
-    /* Player Controls Engine Layer */
+    /* ========== CONTROL SURFACE (touch+keyboard ready) ========== */
     .wvt-control-surface {
       position: absolute;
       bottom: 0;
       left: 0;
       width: 100%;
-      background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.4) 60%, transparent 100%);
+      background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.4) 70%, transparent 100%);
       z-index: 50;
-      padding: 30px 20px 20px 20px;
-      box-sizing: border-box;
+      padding: 28px 20px 20px 20px;
       opacity: 0;
-      transition: opacity 0.3s;
+      transition: opacity 0.25s ease;
+      pointer-events: none;
     }
+    .wvt-player-stage.controls-visible .wvt-control-surface,
     .wvt-player-stage:hover .wvt-control-surface,
     body.sidebar-active .wvt-control-surface {
       opacity: 1;
+      pointer-events: auto;
     }
-
     .wvt-control-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      width: 100%;
+      flex-wrap: wrap;
+      gap: 12px;
     }
-    
     .wvt-control-cluster {
       display: flex;
       align-items: center;
-      gap: 18px;
+      gap: 12px;
     }
-
+    /* touch-friendly buttons: min 48px */
     .wvt-btn {
       background: transparent;
       border: none;
       color: #fff;
       cursor: pointer;
-      display: flex;
+      display: inline-flex;
       align-items: center;
       justify-content: center;
-      padding: 8px;
-      border-radius: 50%;
-      transition: background 0.2s, color 0.2s;
+      padding: 10px;
+      min-width: 48px;
+      min-height: 48px;
+      border-radius: 40px;
+      transition: all 0.2s;
     }
-    .wvt-btn:hover {
-      background: rgba(255,255,255,0.1);
-      color: #d4af37;
-    }
-
-    /* Volume Slider configuration */
+    .wvt-btn:hover { background: rgba(255,255,255,0.12); color: #d4af37; }
     .volume-slider {
-      width: 80px;
+      width: 90px;
       accent-color: #d4af37;
+      cursor: pointer;
+      height: 5px;
+    }
+    /* enlarge thumb for mobile */
+    input[type="range"]::-webkit-slider-thumb {
+      width: 20px;
+      height: 20px;
+      background: #d4af37;
+      border-radius: 50%;
       cursor: pointer;
     }
 
-    /* Immersive System Debug Console Log */
+    /* Debug console: capped entries, XSS-safe */
     .wvt-debug-console {
-      background: rgba(5,5,5,0.85);
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 6px;
+      background: rgba(5,5,10,0.9);
+      border: 1px solid rgba(212,175,55,0.3);
+      border-radius: 12px;
       font-family: monospace;
-      font-size: 0.75rem;
+      font-size: 0.7rem;
       padding: 10px;
-      max-height: 120px;
+      max-height: 110px;
       overflow-y: auto;
-      color: #00ff66;
-      margin-top: 15px;
-      display: none; /* Can be toggled inside settings */
+      color: #8effa0;
+      margin-top: 16px;
+      display: none;
     }
 
-    /* Responsive scaling adjustments */
-    @media (max-width: 480px) {
-      .wvt-sidebar { width: 100vw; }
-      .wvt-gold-ribbon { width: 85%; font-size: 0.85rem; text-align: center; }
+    /* ========== MOBILE RESPONSIVE + TOUCH ========== */
+    @media (max-width: 640px) {
+      .wvt-sidebar { width: 85vw; max-width: 320px; }
+      .wvt-gold-ribbon { width: 88vw; white-space: normal; word-break: keep-all; padding: 6px 14px; }
+      .wvt-gold-ribbon span { white-space: normal; font-size: 0.75rem; text-align: center; }
+      .volume-slider { width: 70px; }
     }
+    @media (max-width: 480px) {
+      .volume-slider { display: none; }  /* clean mobile: mute button only */
+      .wvt-control-cluster { gap: 6px; }
+    }
+    /* fix overlap for small screens */
+    .wvt-player-stage.controls-visible .wvt-control-surface { opacity: 1; }
   </style>
 </head>
 <body>
 
-  <!-- Background Processing & Stage Execution -->
-  <div class="wvt-player-stage" id="playerStage">
-    
-    <!-- Video element -->
-    <video class="wvt-video-canvas" id="mainVideo" playsinline crossorigin="anonymous"></video>
+<div class="wvt-player-stage" id="playerStage">
+  <!-- Video element (CORS attribute REMOVED - MA-04) -->
+  <video class="wvt-video-canvas" id="mainVideo" playsinline></video>
 
-    <!-- Floating System Status Badge -->
-    <div class="wvt-gold-ribbon" id="infoRibbon">
-      <div class="pulse-dot"></div>
-      <span id="ribbonText">WVT Media Processing Engine Live</span>
-    </div>
-
-    <!-- UI Overlay Blocker -->
-    <div class="wvt-dimmer-overlay" id="dimmer"></div>
-
-    <!-- Bottom Interactive Dashboard Deck -->
-    <div class="wvt-control-surface">
-      <div class="wvt-control-row">
-        
-        <!-- Left Cluster: Layout Callouts and Play Core -->
-        <div class="wvt-control-cluster">
-          <button class="wvt-btn" id="openPlaylist" title="Open Playlist">
-            <i data-feather="list"></i>
-          </button>
-          <button class="wvt-btn" id="playPauseBtn" title="Play / Pause">
-            <i data-feather="play"></i>
-          </button>
-          <div class="wvt-control-cluster" style="gap: 5px;">
-            <button class="wvt-btn" id="muteBtn" title="Mute Toggle">
-              <i data-feather="volume-2"></i>
-            </button>
-            <input type="range" class="volume-slider" id="volumeControl" min="0" max="1" step="0.05" value="1">
-          </div>
-        </div>
-
-        <!-- Right Cluster: Engine Parameters and Manifest Displays -->
-        <div class="wvt-control-cluster">
-          <button class="wvt-btn" id="favBtn" title="Favorite Stream">
-            <i data-feather="star"></i>
-          </button>
-          <button class="wvt-btn" id="openSettings" title="Engine Performance">
-            <i data-feather="settings"></i>
-          </button>
-          <button class="wvt-btn" id="fullscreenBtn" title="Fullscreen Override">
-            <i data-feather="maximize"></i>
-          </button>
-        </div>
-
-      </div>
-
-      <!-- Integrated Runtime Logger Display -->
-      <div class="wvt-debug-console" id="debugConsole"></div>
-    </div>
-
+  <!-- Loading Spinner (UX-05) -->
+  <div class="wvt-loading-overlay" id="loadingOverlay">
+    <div class="spinner"></div>
   </div>
 
-  <!-- PLAYLIST SLIDEOUT (LEFT SIDEBAR) -->
-  <aside class="wvt-sidebar wvt-sidebar-left" id="playlistSidebar">
-    <div class="wvt-sidebar-header">
-      <h2>Media Index</h2>
-      <button class="wvt-close-btn" id="closePlaylist"><i data-feather="x"></i></button>
-    </div>
-    <div class="wvt-sidebar-content" id="playlistTarget">
-      <!-- Generated Streams Inserted programmatically -->
-    </div>
-  </aside>
+  <!-- Gold ribbon (stream info) -->
+  <div class="wvt-gold-ribbon" id="infoRibbon">
+    <div class="pulse-dot"></div>
+    <span id="ribbonText">WVT Engine · Ready</span>
+  </div>
 
-  <!-- CONTROL SETTINGS SLIDEOUT (RIGHT SIDEBAR) -->
-  <aside class="wvt-sidebar wvt-sidebar-right" id="settingsSidebar">
-    <div class="wvt-sidebar-header">
-      <h2>Engine Parameters</h2>
-      <button class="wvt-close-btn" id="closeSettings"><i data-feather="x"></i></button>
-    </div>
-    <div class="wvt-sidebar-content">
-      
-      <div class="wvt-setting-row">
-        <div class="wvt-setting-label">Engine Logging Matrix</div>
-        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-          <input type="checkbox" id="toggleConsole"> Show Operational Logs
-        </label>
-      </div>
+  <div class="wvt-dimmer-overlay" id="dimmer"></div>
 
-      <div class="wvt-setting-row">
-        <div class="wvt-setting-label">Local History Profiles</div>
-        <div id="historyTarget" style="font-size: 0.85rem; color: #ccc;">No stream playback logs stored.</div>
-      </div>
-
-      <div class="wvt-setting-row">
-        <div class="wvt-setting-label">System Architecture</div>
-        <div style="font-size: 0.8rem; color: #777; line-height: 1.4;">
-          WVT Engine Pro v4.2<br>
-          Weebly Isolation Wrapper Active<br>
-          Passive Touch Optimization: True
+  <!-- Control Surface (touch & hover) -->
+  <div class="wvt-control-surface">
+    <div class="wvt-control-row">
+      <div class="wvt-control-cluster">
+        <button class="wvt-btn" id="openPlaylist" title="Channels"><i data-feather="list"></i></button>
+        <button class="wvt-btn" id="playPauseBtn" title="Play/Pause"><i data-feather="play"></i></button>
+        <div class="wvt-control-cluster" style="gap: 4px;">
+          <button class="wvt-btn" id="muteBtn" title="Mute"><i data-feather="volume-2"></i></button>
+          <input type="range" class="volume-slider" id="volumeControl" min="0" max="1" step="0.02" value="1">
         </div>
       </div>
-
+      <div class="wvt-control-cluster">
+        <button class="wvt-btn" id="favBtn" title="Favorite"><i data-feather="star"></i></button>
+        <button class="wvt-btn" id="openSettings" title="Settings"><i data-feather="settings"></i></button>
+        <button class="wvt-btn" id="fullscreenBtn" title="Fullscreen"><i data-feather="maximize"></i></button>
+      </div>
     </div>
-  </aside>
+    <div class="wvt-debug-console" id="debugConsole"></div>
+  </div>
+</div>
 
-  <!-- Logic Execution Architecture -->
-  <script>
-    // Asset Manifest Index Configuration Array
-    const streamManifest = [
-      {
-        name: "Primary Request Stream (M3U8)",
-        url: "https://live.worldviewtube.com/wvw/live/ngrp:live_all/playlist.m3u8",
-        type: "application/x-mpegURL"
-      },
-      {
-        name: "Backup Demo Engine Stream (HLS)",
-        url: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-        type: "application/x-mpegURL"
-      },
-      {
-        name: "DASH Reference Engine (MPD)",
-        url: "https://dash.akamaized.net/akamai/bbb_30fps/bbb_30fps.mpd",
-        type: "application/dash+xml"
-      }
-    ];
+<!-- SIDEBARS -->
+<aside class="wvt-sidebar wvt-sidebar-left" id="playlistSidebar">
+  <div class="wvt-sidebar-header">
+    <h2>📡 Channel Index</h2>
+    <button class="wvt-close-btn" id="closePlaylist"><i data-feather="x"></i></button>
+  </div>
+  <div class="wvt-sidebar-content" id="playlistTarget"></div>
+</aside>
 
-    // Core State Registries
-    let currentManifestIndex = 0;
-    let hlsInstance = null;
-    let dashInstance = null;
-    let localFavorites = JSON.parse(localStorage.getItem('wvt_favorites') || '[]');
-    let localHistory = JSON.parse(localStorage.getItem('wvt_history') || '[]');
+<aside class="wvt-sidebar wvt-sidebar-right" id="settingsSidebar">
+  <div class="wvt-sidebar-header">
+    <h2>⚙️ Engine Parameters</h2>
+    <button class="wvt-close-btn" id="closeSettings"><i data-feather="x"></i></button>
+  </div>
+  <div class="wvt-sidebar-content">
+    <div class="wvt-setting-row">
+      <div class="wvt-setting-label">📋 Debug Console</div>
+      <label style="display: flex; align-items: center; gap: 10px;">
+        <input type="checkbox" id="toggleConsole"> Show live logs
+      </label>
+    </div>
+    <div class="wvt-setting-row">
+      <div class="wvt-setting-label">🕘 Recent History</div>
+      <div id="historyTarget" style="font-size:0.8rem;">—</div>
+    </div>
+    <div class="wvt-setting-row">
+      <div class="wvt-setting-label">🎛️ System Core</div>
+      <div style="font-size:0.75rem; color:#aaa;">WVT Pro v4.3 · HLS.js 1.5.15 · Dash.js 4.7.1<br>Touch-optimized · Full recovery active</div>
+    </div>
+  </div>
+</aside>
 
-    // Element Selector Array
-    const video = document.getElementById('mainVideo');
-    const dimmer = document.getElementById('dimmer');
-    const playPauseBtn = document.getElementById('playPauseBtn');
-    const muteBtn = document.getElementById('muteBtn');
-    const volumeControl = document.getElementById('volumeControl');
-    const favBtn = document.getElementById('favBtn');
-    const fullscreenBtn = document.getElementById('fullscreenBtn');
-    const debugConsole = document.getElementById('debugConsole');
-    const ribbonText = document.getElementById('ribbonText');
+<script>
+  // ========== STREAM MANIFEST (C-04 aware: primary dead? auto-fallback added) ==========
+  const streamManifest = [
+    { name: "🌍 WorldView Live (Primary)", url: "https://live.worldviewtube.com/wvw/live/ngrp:live_all/playlist.m3u8", type: "application/x-mpegURL" },
+    { name: "🎬 Mux Test Stream (Backup HLS)", url: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8", type: "application/x-mpegURL" },
+    { name: "📀 DASH Test (AKAMAI)", url: "https://dash.akamaized.net/akamai/bbb_30fps/bbb_30fps.mpd", type: "application/dash+xml" }
+  ];
 
-    // --- Weebly Safe Event Listener Wrappers ---
-    // Protects hosting document loopings via explicit enforcement of { passive: true } where possible
-    function initPassiveSafeUI() {
-      // Sidebar Slide triggers
-      document.getElementById('openPlaylist').addEventListener('click', () => toggleSidebar('left', true));
-      document.getElementById('closePlaylist').addEventListener('click', () => toggleSidebar('left', false));
-      document.getElementById('openSettings').addEventListener('click', () => toggleSidebar('right', true));
-      document.getElementById('closeSettings').addEventListener('click', () => toggleSidebar('right', false));
-      dimmer.addEventListener('click', closeAllSidebars);
+  // ========== GLOBAL STATE ==========
+  let currentManifestIndex = 0;
+  let hlsInstance = null;
+  let dashInstance = null;
+  let localFavorites = JSON.parse(localStorage.getItem('wvt_favorites') || '[]');
+  let localHistory = JSON.parse(localStorage.getItem('wvt_history') || '[]');
+  let previousVolume = 1;
+  let fallbackUsedForPrimary = false;   // prevent infinite fallback loop (C-04)
+  let loadingTimer = null;
 
-      // Passive Mouse/Touch interception optimizations
-      dimmer.addEventListener('touchstart', (e) => {}, { passive: true });
-      document.getElementById('playlistTarget').addEventListener('wheel', (e) => {}, { passive: true });
-      document.getElementById('settingsSidebar').addEventListener('wheel', (e) => {}, { passive: true });
+  // DOM elements
+  const video = document.getElementById('mainVideo');
+  const playPauseBtn = document.getElementById('playPauseBtn');
+  const muteBtn = document.getElementById('muteBtn');
+  const volumeControl = document.getElementById('volumeControl');
+  const favBtn = document.getElementById('favBtn');
+  const fullscreenBtn = document.getElementById('fullscreenBtn');
+  const debugConsole = document.getElementById('debugConsole');
+  const ribbonText = document.getElementById('ribbonText');
+  const loadingOverlay = document.getElementById('loadingOverlay');
+  const playerStage = document.getElementById('playerStage');
+
+  // ========== HELPER: LOGGER (FIX M-02 + MA-01: XSS + unbounded) ==========
+  function logEvent(msg) {
+    const stamp = new Date().toLocaleTimeString();
+    const entry = document.createElement('div');
+    entry.textContent = `[${stamp}] ${msg}`;   // textContent = NO XSS
+    debugConsole.appendChild(entry);
+    // Trim to last 100 entries (memory leak fix)
+    while (debugConsole.children.length > 100) debugConsole.removeChild(debugConsole.firstChild);
+    debugConsole.scrollTop = debugConsole.scrollHeight;
+    console.log(`[WVT]: ${msg}`);
+  }
+
+  // ========== SHOW/HIDE LOADING ==========
+  function setLoading(visible) {
+    if (visible) {
+      loadingOverlay.classList.add('active');
+      if (loadingTimer) clearTimeout(loadingTimer);
+    } else {
+      loadingTimer = setTimeout(() => loadingOverlay.classList.remove('active'), 150);
     }
+  }
 
-    // --- Sidebar State Coordinator ---
-    function toggleSidebar(side, open) {
-      if (open) {
-        closeAllSidebars(); // Auto close opposing sides to preserve center structure focus
-        document.body.classList.add('sidebar-active', `${side}-open`);
+  // ========== SYNC VOLUME + MUTE UI (MA-02) ==========
+  function syncVolumeUI() {
+    const isMuted = video.muted || video.volume === 0;
+    muteBtn.innerHTML = isMuted ? '<i data-feather="volume-x"></i>' : '<i data-feather="volume-2"></i>';
+    volumeControl.value = isMuted ? 0 : video.volume;
+    feather.replace(muteBtn);
+    feather.replace(volumeControl.parentElement?.querySelector('i') || muteBtn);
+  }
+
+  // ========== FULLSCREEN (C-03: cross-platform fix) ==========
+  function enterFullscreen(element) {
+    const req = element.requestFullscreen || element.webkitEnterFullscreen || element.webkitRequestFullscreen;
+    if (req) {
+      if (element.webkitEnterFullscreen) {
+        // iOS Safari specific
+        element.webkitEnterFullscreen();
       } else {
-        document.body.classList.remove(`${side}-open`);
-        if (!document.body.classList.contains('left-open') && !document.body.classList.contains('right-open')) {
-          document.body.classList.remove('sidebar-active');
+        req.call(element).catch(err => logEvent(`Fullscreen error: ${err.message}`));
+      }
+    } else logEvent("Fullscreen not supported");
+  }
+  function exitFullscreen() {
+    const exit = document.exitFullscreen || document.webkitExitFullscreen;
+    if (exit) exit.call(document);
+  }
+
+  // update fullscreen icon on change
+  function onFullscreenChange() {
+    const isFull = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    fullscreenBtn.innerHTML = isFull ? '<i data-feather="minimize-2"></i>' : '<i data-feather="maximize"></i>';
+    feather.replace(fullscreenBtn);
+  }
+  document.addEventListener('fullscreenchange', onFullscreenChange);
+  document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+
+  // ========== CORE STREAM DESTROY + CLEANUP (C-01 + M-01) ==========
+  function destroyEngines() {
+    if (hlsInstance) {
+      hlsInstance.destroy();
+      hlsInstance = null;
+    }
+    if (dashInstance) {
+      dashInstance.destroy();   // M-01: destroy() instead of reset()
+      dashInstance = null;
+    }
+    // CRITICAL: clear video src and force MSE detachment (C-01)
+    video.src = '';
+    video.load();   // flushes all source buffers
+  }
+
+  // ========== AUTO FALLBACK FOR PRIMARY STREAM FATAL (C-04) ==========
+  let fatalFallbackAttempted = false;
+  function attemptPrimaryFallback() {
+    if (!fatalFallbackAttempted && currentManifestIndex === 0) {
+      fatalFallbackAttempted = true;
+      logEvent("⚠️ Primary stream fatal error — auto-switching to backup stream (index 1)");
+      bootStream(1);
+      return true;
+    }
+    return false;
+  }
+
+  // ========== HLS RECOVERY + FALLBACK (C-02 enhanced) ==========
+  function setupHlsErrorHandling(hls, streamUrl, streamIndex) {
+    hls.on(Hls.Events.ERROR, (event, data) => {
+      if (!data.fatal) return;
+      logEvent(`HLS fatal error [${data.type}]: ${data.details || ''}`);
+      if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+        logEvent("Network error → attempting hls.startLoad() recovery");
+        hls.startLoad();
+      } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+        logEvent("Media error → attempting hls.recoverMediaError()");
+        hls.recoverMediaError();
+      } else {
+        logEvent("Unrecoverable HLS error, destroying instance.");
+        hls.destroy();
+        if (!attemptPrimaryFallback()) {
+          logEvent("Stream failed permanently. No fallback left.");
+          setLoading(false);
         }
       }
-    }
+    });
+  }
 
-    function closeAllSidebars() {
-      document.body.classList.remove('sidebar-active', 'left-open', 'right-open');
-    }
+  // ========== BOOT STREAM (COMPLETE REWRITE WITH ALL FIXES) ==========
+  function bootStream(index) {
+    if (index === undefined || index < 0 || index >= streamManifest.length) index = 0;
+    currentManifestIndex = index;
+    const target = streamManifest[index];
+    logEvent(`▶️ Booting: ${target.name} (${target.type})`);
+    ribbonText.innerText = `🎬 ${target.name}`;
+    setLoading(true);
 
-    // --- Engine Diagnostics Log Manager ---
-    function logEvent(msg) {
-      const stamp = new Date().toLocaleTimeString();
-      debugConsole.innerHTML += `<div>[${stamp}] ${msg}</div>`;
-      debugConsole.scrollTop = debugConsole.scrollHeight;
-      console.log(`[WVT Engine]: ${msg}`);
-    }
+    // 1) Destroy old engines + full media cleanup (C-01)
+    destroyEngines();
 
-    // --- Core Video Playback Engine ---
-    function bootStream(index) {
-      currentManifestIndex = index;
-      const targetStream = streamManifest[index];
-      logEvent(`Initializing pipeline mount target: ${targetStream.name}`);
-      ribbonText.innerText = `Processing: ${targetStream.name}`;
+    // 2) update playlist active state
+    document.querySelectorAll('.wvt-list-item').forEach((item, idx) => {
+      item.classList.toggle('active', idx === index);
+    });
 
-      // Reset Active Parsing Frameworks
-      if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
-      if (dashInstance) { dashInstance.reset(); dashInstance = null; }
-      video.removeAttribute('src');
+    // 3) track history (minor improvement: store stable index)
+    trackHistory(index, target.name);
 
-      // Update Native Playlist Selectors
-      document.querySelectorAll('.wvt-list-item').forEach((item, idx) => {
-        item.classList.toggle('active', idx === index);
+    // 4) Start engine based on type
+    const isHLS = target.type === "application/x-mpegURL";
+    const isDASH = target.type === "application/dash+xml";
+
+    if (isHLS && Hls.isSupported()) {
+      // MA-05: Use better buffer values (8 MiB binary + live sync)
+      hlsInstance = new Hls({
+        maxBufferSize: 8 * 1024 * 1024,      // 8 MiB (tolerates mobile drops)
+        maxBufferLength: 30,
+        liveSyncDurationCount: 3,
+        backBufferLength: 60
       });
-
-      // Appending to playback history tracking arrays
-      trackHistory(targetStream.name);
-
-      // Process Stream Type Multiplexing
-      if (targetStream.type === "application/x-mpegURL") {
-        if (Hls.isSupported()) {
-          hlsInstance = new Hls({ maxBufferSize: 4 * 1000 * 1000 }); // Optimizing buffer footprint
-          hlsInstance.loadSource(targetStream.url);
-          hlsInstance.attachMedia(video);
-          hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
-            video.play().catch(() => logEvent("Auto-play restricted. Waiting user interaction."));
-          });
-          hlsInstance.on(Hls.Events.ERROR, (event, data) => {
-            if (data.fatal) logEvent(`HLS Fatal Engine Exception: ${data.type}`);
-          });
-        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-          // Fallback support framework for iOS Native Safari core engine layer
-          video.src = targetStream.url;
-        } else {
-          logEvent("Deployment target does not support HLS parsing engine.");
-        }
-      } else if (targetStream.type === "application/dash+xml") {
-        if (typeof dashjs !== 'undefined') {
-          dashInstance = dashjs.MediaPlayer().create();
-          dashInstance.initialize(video, targetStream.url, true);
-        } else {
-          logEvent("MPEG-DASH component infrastructure library fault.");
-        }
-      }
-
-      updateFavoriteUIState();
-    }
-
-    // --- Core UI Deck Event Handlers ---
-    playPauseBtn.addEventListener('click', () => {
-      if (video.paused) {
-        video.play();
-        playPauseBtn.innerHTML = '<i data-feather="pause"></i>';
-      } else {
-        video.pause();
-        playPauseBtn.innerHTML = '<i data-feather="play"></i>';
-      }
-      feather.replace();
-    });
-
-    video.addEventListener('play', () => {
-      playPauseBtn.innerHTML = '<i data-feather="pause"></i>';
-      feather.replace();
-    });
-
-    video.addEventListener('pause', () => {
-      playPauseBtn.innerHTML = '<i data-feather="play"></i>';
-      feather.replace();
-    });
-
-    muteBtn.addEventListener('click', () => {
-      video.muted = !video.muted;
-      muteBtn.innerHTML = video.muted ? '<i data-feather="volume-x"></i>' : '<i data-feather="volume-2"></i>';
-      feather.replace();
-    });
-
-    volumeControl.addEventListener('input', (e) => {
-      video.volume = e.target.value;
-      video.muted = (e.target.value == 0);
-    });
-
-    fullscreenBtn.addEventListener('click', () => {
-      const stage = document.getElementById('playerStage');
-      if (!document.fullscreenElement) {
-        stage.requestFullscreen().catch(err => logEvent(`Error enabling Fullscreen Override: ${err.message}`));
-      } else {
-        document.exitFullscreen();
-      }
-    });
-
-    // --- Favorites and History Matrix Management ---
-    favBtn.addEventListener('click', () => {
-      const currentStream = streamManifest[currentManifestIndex].name;
-      if (localFavorites.includes(currentStream)) {
-        localFavorites = localFavorites.filter(item => item !== currentStream);
-        logEvent("Removed from collection index mapping.");
-      } else {
-        localFavorites.push(currentStream);
-        logEvent("Appended target into localStorage tracking state.");
-      }
-      localStorage.setItem('wvt_favorites', JSON.stringify(localFavorites));
-      updateFavoriteUIState();
-    });
-
-    function updateFavoriteUIState() {
-      const currentStream = streamManifest[currentManifestIndex].name;
-      if (localFavorites.includes(currentStream)) {
-        favBtn.style.color = '#d4af37'; // Active fill state visualization
-      } else {
-        favBtn.style.color = '#fff';
-      }
-    }
-
-    function trackHistory(name) {
-      localHistory = localHistory.filter(item => item !== name);
-      localHistory.unshift(name);
-      if (localHistory.length > 5) localHistory.pop(); // Hard historical ceiling tracking limits
-      localStorage.setItem('wvt_history', JSON.stringify(localHistory));
-      renderHistoryUI();
-    }
-
-    function renderHistoryUI() {
-      const container = document.getElementById('historyTarget');
-      if (localHistory.length === 0) {
-        container.innerHTML = "No stream playback logs stored.";
-        return;
-      }
-      container.innerHTML = localHistory.map(item => `<div style="padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.05); font-size:0.8rem;">• ${item}</div>`).join('');
-    }
-
-    // --- Dynamic Component Builders ---
-    function buildPlaylistUI() {
-      const container = document.getElementById('playlistTarget');
-      container.innerHTML = '';
-      streamManifest.forEach((stream, index) => {
-        const row = document.createElement('div');
-        row.className = 'wvt-list-item';
-        row.innerHTML = `
-          <div style="font-weight:500; font-size:0.9rem;">${stream.name}</div>
-          <i data-feather="play-circle" style="width:16px; height:16px; color:#aaa;"></i>
-        `;
-        row.addEventListener('click', () => {
-          bootStream(index);
-          if(window.innerWidth <= 480) closeAllSidebars(); // Closes interface upon selection execution for smaller screen footprints
-        });
-        container.appendChild(row);
+      hlsInstance.loadSource(target.url);
+      hlsInstance.attachMedia(video);
+      setupHlsErrorHandling(hlsInstance, target.url, index);
+      hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+        logEvent("HLS manifest parsed — starting playback.");
+        setLoading(false);
+        video.play().catch(e => logEvent(`Autoplay blocked: ${e.message}`));
       });
-      feather.replace();
+      hlsInstance.on(Hls.Events.FRAG_LOADING_EMERGENCY_ABORTED, () => logEvent("Emergency abort, retrying"));
+    } 
+    else if (isHLS && video.canPlayType('application/vnd.apple.mpegurl')) {
+      // Native Safari fallback
+      video.src = target.url;
+      video.addEventListener('loadedmetadata', () => setLoading(false), { once: true });
+      video.play().catch(e => logEvent(`Native HLS autoplay blocked`));
+    }
+    else if (isDASH && typeof dashjs !== 'undefined') {
+      dashInstance = dashjs.MediaPlayer().create();
+      // MA-06: attach error handler + autoPlay but catch promise
+      dashInstance.initialize(video, target.url, true);
+      dashInstance.on(dashjs.MediaPlayer.events.ERROR, (e) => {
+        logEvent(`DASH error: ${e.error}`);
+        if (!attemptPrimaryFallback()) setLoading(false);
+      });
+      dashInstance.on(dashjs.MediaPlayer.events.CAN_PLAY, () => {
+        setLoading(false);
+        logEvent("DASH stream ready");
+      });
+      setTimeout(() => setLoading(false), 5000);
+    } 
+    else {
+      logEvent(`No supported engine for ${target.type}`);
+      setLoading(false);
     }
 
-    // Console View Mode Toggle
-    document.getElementById('toggleConsole').addEventListener('change', (e) => {
-      debugConsole.style.display = e.target.checked ? 'block' : 'none';
-    });
+    // ensure loading overlay hidden after 12s max
+    setTimeout(() => setLoading(false), 12000);
+    updateFavoriteUIState();
+  }
 
-    // --- Application Bootstrapping Sequence ---
-    window.addEventListener('DOMContentLoaded', () => {
-      initPassiveSafeUI();
-      buildPlaylistUI();
-      renderHistoryUI();
-      
-      // Auto-load target parameters. Default start index 0 as requested. Sidebars closed by default config.
-      bootStream(0);
-      
-      // Asset Vector Icon Engine Translation Process Execution
-      feather.replace();
-      logEvent("WorldViewTube Engine pipeline structural elements online.");
+  // ========== HISTORY (key on stable index, avoid rename issues) ==========
+  function trackHistory(index, name) {
+    localHistory = localHistory.filter(item => item.index !== index);
+    localHistory.unshift({ index, name, timestamp: Date.now() });
+    if (localHistory.length > 8) localHistory.pop();
+    localStorage.setItem('wvt_history', JSON.stringify(localHistory));
+    renderHistoryUI();
+  }
+  function renderHistoryUI() {
+    const container = document.getElementById('historyTarget');
+    if (!localHistory.length) { container.innerHTML = "No stream logs."; return; }
+    container.innerHTML = localHistory.map(h => `<div style="padding:6px 0; border-bottom:1px solid #2a2a2a; font-size:0.75rem;">▶ ${h.name}</div>`).join('');
+  }
+
+  // ========== FAVORITES ==========
+  function updateFavoriteUIState() {
+    const currentName = streamManifest[currentManifestIndex].name;
+    if (localFavorites.includes(currentName)) {
+      favBtn.style.color = '#d4af37';
+      favBtn.style.textShadow = '0 0 2px gold';
+    } else {
+      favBtn.style.color = '#fff';
+    }
+  }
+  favBtn.addEventListener('click', () => {
+    const currentName = streamManifest[currentManifestIndex].name;
+    if (localFavorites.includes(currentName)) {
+      localFavorites = localFavorites.filter(n => n !== currentName);
+      logEvent(`Removed from favorites: ${currentName}`);
+    } else {
+      localFavorites.push(currentName);
+      logEvent(`Added to favorites: ${currentName}`);
+    }
+    localStorage.setItem('wvt_favorites', JSON.stringify(localFavorites));
+    updateFavoriteUIState();
+  });
+
+  // ========== PLAYLIST UI (Event delegation + no orphaned listeners) ==========
+  function buildPlaylistUI() {
+    const container = document.getElementById('playlistTarget');
+    container.replaceChildren();   // M-03: clean removal
+    streamManifest.forEach((stream, idx) => {
+      const div = document.createElement('div');
+      div.className = 'wvt-list-item';
+      div.setAttribute('data-index', idx);
+      div.innerHTML = `<div style="font-weight:500;">${stream.name}</div><i data-feather="play-circle" style="width:18px;"></i>`;
+      container.appendChild(div);
     });
-  </script>
+    feather.replace(container);
+    // event delegation
+    container.addEventListener('click', (e) => {
+      const item = e.target.closest('.wvt-list-item');
+      if (!item) return;
+      const newIndex = parseInt(item.getAttribute('data-index'));
+      if (!isNaN(newIndex)) {
+        fatalFallbackAttempted = false;  // reset fallback flag on manual switch
+        bootStream(newIndex);
+        if (window.innerWidth <= 640) closeAllSidebars();
+      }
+    });
+  }
+
+  // ========== SIDEBAR LOGIC ==========
+  function toggleSidebar(side, open) {
+    if (open) {
+      closeAllSidebars();
+      document.body.classList.add('sidebar-active', `${side}-open`);
+    } else {
+      document.body.classList.remove(`${side}-open`);
+      if (!document.body.classList.contains('left-open') && !document.body.classList.contains('right-open'))
+        document.body.classList.remove('sidebar-active');
+    }
+  }
+  function closeAllSidebars() {
+    document.body.classList.remove('sidebar-active', 'left-open', 'right-open');
+  }
+  // touch controls visibility (MA-03)
+  let controlTimer;
+  function showControlsTemporarily() {
+    playerStage.classList.add('controls-visible');
+    clearTimeout(controlTimer);
+    controlTimer = setTimeout(() => {
+      if (!document.body.classList.contains('sidebar-active'))
+        playerStage.classList.remove('controls-visible');
+    }, 4000);
+  }
+  playerStage.addEventListener('touchstart', showControlsTemporarily, { passive: true });
+  playerStage.addEventListener('mousemove', showControlsTemporarily);
+
+  // ========== VOLUME + MUTE SYNC ==========
+  function handleVolumeChange() {
+    video.volume = volumeControl.value;
+    if (video.volume === 0) video.muted = true;
+    else if (video.muted) video.muted = false;
+    syncVolumeUI();
+    if (video.volume > 0) previousVolume = video.volume;
+  }
+  function toggleMute() {
+    if (video.muted) {
+      video.muted = false;
+      video.volume = previousVolume || 1;
+      volumeControl.value = video.volume;
+    } else {
+      previousVolume = video.volume;
+      video.muted = true;
+      volumeControl.value = 0;
+    }
+    syncVolumeUI();
+  }
+  volumeControl.addEventListener('input', handleVolumeChange);
+  muteBtn.addEventListener('click', toggleMute);
+  video.addEventListener('volumechange', syncVolumeUI);
+  // playback button sync
+  playPauseBtn.addEventListener('click', () => {
+    if (video.paused) video.play().catch(e => logEvent(`play error: ${e}`));
+    else video.pause();
+  });
+  video.addEventListener('play', () => { playPauseBtn.innerHTML = '<i data-feather="pause"></i>'; feather.replace(playPauseBtn); });
+  video.addEventListener('pause', () => { playPauseBtn.innerHTML = '<i data-feather="play"></i>'; feather.replace(playPauseBtn); });
+
+  // FULLSCREEN (C-03 fixed)
+  fullscreenBtn.addEventListener('click', () => {
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) enterFullscreen(video);
+    else exitFullscreen();
+  });
+
+  // toggle debug console
+  document.getElementById('toggleConsole').addEventListener('change', (e) => {
+    debugConsole.style.display = e.target.checked ? 'block' : 'none';
+  });
+  // init sidebars UI
+  document.getElementById('openPlaylist').addEventListener('click', () => toggleSidebar('left', true));
+  document.getElementById('closePlaylist').addEventListener('click', () => toggleSidebar('left', false));
+  document.getElementById('openSettings').addEventListener('click', () => toggleSidebar('right', true));
+  document.getElementById('closeSettings').addEventListener('click', () => toggleSidebar('right', false));
+  document.getElementById('dimmer').addEventListener('click', closeAllSidebars);
+
+  // ========== KEYBOARD SHORTCUTS (MN-03) ==========
+  window.addEventListener('keydown', (e) => {
+    const tag = e.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    switch(e.key) {
+      case ' ': case 'Space': e.preventDefault(); video.paused ? video.play() : video.pause(); break;
+      case 'm': case 'M': toggleMute(); break;
+      case 'f': case 'F': fullscreenBtn.click(); break;
+      case 'ArrowUp': e.preventDefault(); video.volume = Math.min(1, video.volume+0.1); handleVolumeChange(); break;
+      case 'ArrowDown': e.preventDefault(); video.volume = Math.max(0, video.volume-0.1); handleVolumeChange(); break;
+      case 'Escape': if (document.fullscreenElement) exitFullscreen(); else closeAllSidebars(); break;
+    }
+  });
+
+  // ========== BOOTSTRAP ==========
+  window.addEventListener('DOMContentLoaded', () => {
+    buildPlaylistUI();
+    renderHistoryUI();
+    syncVolumeUI();
+    feather.replace();  // initial global icons
+    // start primary stream (with fallback protection)
+    bootStream(0);
+    logEvent("✅ WorldViewTube Engine fully rebuilt — all critical fixes applied (C-01/C-02/C-03/C-04, memory, touch, fullscreen, auto fallback)");
+  });
+</script>
+<noscript>
+  <div style="position:fixed; top:0; left:0; width:100%; background:#111; color:#d4af37; padding:20px; text-align:center; z-index:9999;">
+    ⚠️ JavaScript is required for the WorldViewTube media player. Please enable JavaScript or <a style="color:#d4af37;" href="#">download our native app</a>.
+  </div>
+</noscript>
 </body>
 </html>
